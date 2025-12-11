@@ -424,14 +424,14 @@ Dify 后端使用蓝图（Blueprint）来组织 API 路由，主要包含以下�
 
 配置管理位于 `configs/` 目录，主要使用 Pydantic 进行配置验证和管理：
 - **deploy/**作用：应用部署相关配置
-- 包含部署环境（生产/开发）、应用名称、调试模式等基础设置
-- 核心配置项： DEBUG 开关、 EDITION （部署版本，如SELF_HOSTED/CLOUD）、 DEPLOY_ENV （部署环境类型）
-- 对应文件： `__init__.py`
+- - 包含部署环境（生产/开发）、应用名称、调试模式等基础设置
+- - 核心配置项： DEBUG 开关、 EDITION （部署版本，如SELF_HOSTED/CLOUD）、 DEPLOY_ENV （部署环境类型）
+- - 对应文件： `__init__.py`
 - **enterprise/**作用：企业版功能配置
-- 控制企业级特性的启用状态，如自定义Logo等高级功能
-- 包含授权检查机制，明确要求联系商务团队获取许可
-- 核心配置项： ENTERPRISE_ENABLED （企业功能总开关）、 CAN_REPLACE_LOGO （品牌定制权限）
-- 对应文件： `__init__.py`
+- - 控制企业级特性的启用状态，如自定义Logo等高级功能
+- - 包含授权检查机制，明确要求联系商务团队获取许可
+- - 核心配置项： ENTERPRISE_ENABLED （企业功能总开关）、 CAN_REPLACE_LOGO （品牌定制权限）
+- - 对应文件： `__init__.py`
 - **extra/**作用：第三方服务集成配置
 - 存放非核心但常用的外部服务配置
 - notion_config.py ：Notion集成的OAuth凭证和API令牌设置
