@@ -423,45 +423,45 @@ Dify 后端使用蓝图（Blueprint）来组织 API 路由，主要包含以下�
 ### 4.1 配置管理
 
 配置管理位于 `configs/` 目录，主要使用 Pydantic 进行配置验证和管理：
-- deploy/作用：应用部署相关配置
+#### deploy/作用：应用部署相关配置
  - 包含部署环境（生产/开发）、应用名称、调试模式等基础设置
  - 核心配置项： DEBUG 开关、 EDITION （部署版本，如SELF_HOSTED/CLOUD）、 DEPLOY_ENV （部署环境类型）
  - 对应文件： `__init__.py`
-- enterprise/作用：企业版功能配置
+#### enterprise/作用：企业版功能配置
  - 控制企业级特性的启用状态，如自定义Logo等高级功能
  - 包含授权检查机制，明确要求联系商务团队获取许可
  - 核心配置项： ENTERPRISE_ENABLED （企业功能总开关）、 CAN_REPLACE_LOGO （品牌定制权限）
  - 对应文件： `__init__.py`
-- extra/作用：第三方服务集成配置
+#### extra/作用：第三方服务集成配置
  - 存放非核心但常用的外部服务配置
  - notion_config.py ：Notion集成的OAuth凭证和API令牌设置
  - sentry_config.py ：错误监控平台Sentry的连接配置
  - 对应文件： `notion_config.py`
-- feature/作用：功能模块配置
+#### feature/作用：功能模块配置
  - 按业务功能模块组织的配置，当前包含：
  - hosted_service/ ：托管服务相关配置，如模型调用 credits 计算规则、OpenAI API密钥管理
  - 核心配置项： HOSTED_MODEL_CREDIT_CONFIG （模型计费标准）
  - 对应文件： `__init__.py`
-- middleware/作用：中间件配置中心
+#### middleware/作用：中间件配置中心
  - 按中间件类型分类，包含三大子系统：
  - cache/ ：缓存服务配置（如Redis连接参数： `redis_config.py` ）
  - storage/ ：对象存储配置（支持S3/OSS等多种后端： `amazon_s3_storage_config.py` ）
  - vdb/ ：向量数据库配置（如Milvus连接参数： `milvus_config.py` ）
-- observability/作用：可观测性配置
+#### observability/作用：可观测性配置
  - 负责监控、追踪和日志相关设置
  - otel/ ：OpenTelemetry配置，包含分布式追踪采样率、指标导出端点等
  - 核心配置项： OTEL_SAMPLING_RATE （追踪采样率）、 OTLP_TRACE_ENDPOINT （数据上报地址）
  - 对应文件： `otel_config.py`
-- packaging/作用：打包与版本配置
+#### packaging/作用：打包与版本配置
  - 管理项目打包相关元数据
  - 读取 pyproject.toml 中的版本信息，供构建流程使用
  - 对应文件： `pyproject.py`
-- remote_settings_sources/作用：远程配置源集成
+#### remote_settings_sources/作用：远程配置源集成
  - 对接外部配置中心服务，支持动态配置更新
  - apollo/ ：Apollo配置中心客户端（支持热更新、命名空间管理）
  - nacos/ ：Nacos配置中心集成（未展示文件，但根据目录结构推测）
  - 对应文件： `__init__.py`
-- 总结设计特点：
+#### 总结设计特点：
  - 1. 模块化组织 ：按功能域划分配置，如部署、企业特性、中间件等
  - 2. 环境隔离 ：通过 DEPLOY_ENV 等参数实现不同环境的配置隔离
  - 3. 扩展友好 ：每个配置类使用Pydantic BaseSettings，支持环境变量注入
