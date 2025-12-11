@@ -354,15 +354,27 @@ api/
 ├── app.py                  # 应用入口
 ├── app_factory.py          # 应用工厂函数
 ├── dify_app.py             # 自定义 Flask 应用类
-├── configs/                # 配置管理
-├── controllers/            # API 控制器
-├── core/                   # 核心业务逻辑
-├── models/                 # 数据库模型
-├── services/               # 业务服务
-├── extensions/             # 扩展系统
-├── libs/                   # 通用库
-├── migrations/             # 数据库迁移
-└── tasks/                  # Celery 任务
+├── configs/                # 配置管理，存放环境变量、默认参数、插件配置等静态或全局配置
+├── constants.py            # 各类全局常量与枚举，如状态码、类型标识、默认值等
+├── contexts/               # 请求/业务上下文管理，用于在接口层传递状态、用户信息、追踪等上下文数据
+├── controllers/            # 控制层（Controller），处理外部 HTTP 请求、解析参数、调用服务、返回响应
+├── core/                   # 核心模块实现，包含基础运行时、模型调度以及插件基础设施等功能块（如 model_runtime）
+├── docker/                 # 负责管理API服务在Docker环境中的启动、运行模式和服务配置
+├── enums/                  # 实现多租户配额管理和云计划功能的核心组件，为系统的计费和资源控制提供了坚实的基础
+├── events/                 # 实现事件驱动架构，通过定义和处理各种系统事件，实现业务逻辑的解耦和异步处理
+├── extensions/             # 集成和配置各种第三方服务、库和自定义功能,为上层业务逻辑提供支持
+├── factories/              # 实现工厂模式的核心组件，为系统提供了统一的对象创建机制，便于管理和扩展各种复杂对象的创建逻辑
+├── fields/                 # 实现RESTful API的核心组件，使用Flask-RESTX的fields系统来定义和规范API请求与响应的数据格式
+├── libs/                   # 提供了各种通用功能和工具函数
+├── migrations/             # 提供数据库模式迁移管理，使用Alembic工具实现数据库结构的版本控制和自动化迁移
+├── models/                 # 定义数据库模型，使用SQLAlchemy ORM映射数据库表结构
+├── repositories/           # 实现数据访问层（Repository），负责与数据库交互，执行CRUD操作
+├── schedule/               # 实现定时任务调度，使用Celery Beat和Celery Worker
+├── services/               # 实现业务逻辑层（Service），处理业务规则、数据转换、业务逻辑等
+├── storage/                # 实现文件存储服务，负责文件上传、下载、管理等操作，支持本地存储、云存储等
+├── tasks/                  # 实现异步任务处理，使用 Celery 队列系统
+├── templates/              # 存放 HTML 模板文件，用于渲染 Web 页面
+└── tests/                  # 存放单元测试、集成测试等，确保代码质量和功能稳定性
 ```
 
 ## 2. 应用启动流程
@@ -411,9 +423,50 @@ Dify 后端使用蓝图（Blueprint）来组织 API 路由，主要包含以下�
 ### 4.1 配置管理
 
 配置管理位于 `configs/` 目录，主要使用 Pydantic 进行配置验证和管理：
-
-- **app_config.py**：定义应用配置模型
-- **dify_config**：全局配置实例，从 `.env` 文件加载配置
+- **deploy/**作用：应用部署相关配置
+- 包含部署环境（生产/开发）、应用名称、调试模式等基础设置
+- 核心配置项： DEBUG 开关、 EDITION （部署版本，如SELF_HOSTED/CLOUD）、 DEPLOY_ENV （部署环境类型）
+- 对应文件： `__init__.py`
+- **enterprise/**作用：企业版功能配置
+- 控制企业级特性的启用状态，如自定义Logo等高级功能
+- 包含授权检查机制，明确要求联系商务团队获取许可
+- 核心配置项： ENTERPRISE_ENABLED （企业功能总开关）、 CAN_REPLACE_LOGO （品牌定制权限）
+- 对应文件： `__init__.py`
+- **extra/**作用：第三方服务集成配置
+- 存放非核心但常用的外部服务配置
+- notion_config.py ：Notion集成的OAuth凭证和API令牌设置
+- sentry_config.py ：错误监控平台Sentry的连接配置
+- 对应文件： `notion_config.py`
+- **feature/**作用：功能模块配置
+- 按业务功能模块组织的配置，当前包含：
+  - hosted_service/ ：托管服务相关配置，如模型调用 credits 计算规则、OpenAI API密钥管理
+- 核心配置项： HOSTED_MODEL_CREDIT_CONFIG （模型计费标准）
+- 对应文件： `__init__.py`
+- **middleware/**作用：中间件配置中心
+- 按中间件类型分类，包含三大子系统：
+  - cache/ ：缓存服务配置（如Redis连接参数： `redis_config.py` ）
+  - storage/ ：对象存储配置（支持S3/OSS等多种后端： `amazon_s3_storage_config.py` ）
+  - vdb/ ：向量数据库配置（如Milvus连接参数： `milvus_config.py` ）
+- **observability/**作用：可观测性配置
+- 负责监控、追踪和日志相关设置
+- otel/ ：OpenTelemetry配置，包含分布式追踪采样率、指标导出端点等
+- 核心配置项： OTEL_SAMPLING_RATE （追踪采样率）、 OTLP_TRACE_ENDPOINT （数据上报地址）
+- 对应文件： `otel_config.py`
+- **packaging/**作用：打包与版本配置
+- 管理项目打包相关元数据
+- 读取 pyproject.toml 中的版本信息，供构建流程使用
+- 对应文件： `pyproject.py`
+- **remote_settings_sources/**作用：远程配置源集成
+- 对接外部配置中心服务，支持动态配置更新
+- apollo/ ：Apollo配置中心客户端（支持热更新、命名空间管理）
+- nacos/ ：Nacos配置中心集成（未展示文件，但根据目录结构推测）
+- 对应文件： `__init__.py`
+- **总结设计特点：**
+1. 模块化组织 ：按功能域划分配置，如部署、企业特性、中间件等
+2. 环境隔离 ：通过 DEPLOY_ENV 等参数实现不同环境的配置隔离
+3. 扩展友好 ：每个配置类使用Pydantic BaseSettings，支持环境变量注入
+4. 安全控制 ：企业功能明确标注授权要求，关键凭证通过配置文件管理
+所有配置遵循统一的类型安全规范，通过Pydantic实现参数验证和默认值管理，确保配置加载过程的可靠性。
 
 ### 4.2 控制器
 
