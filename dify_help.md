@@ -528,7 +528,7 @@ Dify 后端使用蓝图（Blueprint）来组织 API 路由，主要包含以下�
 #### agent/作用：智能代理核心实现
 - 核心功能
   - 提供代理运行时框架，支持工具调用、思维链(COT)执行和多轮对话管理
-- 关键文件
+- 关键实现
   - base_agent_runner.py 实现了代理执行的基础逻辑，包括工具回调处理、内存管理和对话状态跟踪
 - 技术特点
   - 集成 TokenBufferMemory 实现对话历史管理
@@ -537,7 +537,7 @@ Dify 后端使用蓝图（Blueprint）来组织 API 路由，主要包含以下�
 #### app/作用：应用运行时引擎
 - 核心功能
   - 管理不同类型应用（聊天/工作流/API）的生命周期和执行逻辑
-- 关键文件
+- 关键实现
   - apps/ ：包含 base_app_runner.py 等应用执行基类，处理模型调用、提示转换和队列管理
   - app_config/ ：应用配置管理，支持文件上传、权限控制等特性配置
   - task_pipeline/ ：任务流水线处理，支持暂停/恢复和超时控制
@@ -545,22 +545,54 @@ Dify 后端使用蓝图（Blueprint）来组织 API 路由，主要包含以下�
   - 实现 recalc_llm_max_tokens 动态调整模型上下文窗口
   - 支持多来源调用（API/控制台/Web）
   - 集成输入内容审核和高级提示转换功能
+#### base/作用：基础功能模块
+- 核心功能 ：提供跨模块基础能力，当前主要包含TTS（文本转语音）功能
+- 关键实现 ：tts/app_generator_tts_publisher.py 实现语音合成与流式发布
+- 技术特点 ：
+  - 支持多线程音频合成与Base64编码转换
+  - 通过队列实现音频流异步处理
+  - 兼容主流TTS模型接口
+#### callback_handler/作用：回调处理中心
+- 核心功能 ：统一管理工具调用、模型交互和系统事件的生命周期回调
+- 关键实现 ： agent_tool_callback_handler.py 提供带颜色的控制台日志输出
+- 技术特点 ：
+  - 支持多类型事件跟踪（工具调用/模型响应/错误处理）
+  - 集成Ops追踪系统，提供执行链路可视化
+  - 可扩展至外部监控系统集成
 #### datasource/作用：数据源集成框架
 - 核心功能 ：统一管理各类数据源接入，包括本地文件、在线文档和云存储
-- 关键实现 ： datasource_manager.py 通过插件化架构支持数据源扩展
+- 关键实现 ：datasource_manager.py 通过插件化架构支持数据源扩展
 - 支持类型 ：
   - local_file/ ：本地文件解析
   - online_document/ ：在线文档抓取
   - website_crawl/ ：网站内容爬取
-#### llm_generator/作用：大语言模型生成器
-- 核心功能 ：提供LLM调用封装，支持结构化输出、代码生成和提示优化
-- 关键能力 ：
-  - 通过 llm_generator.py 实现多场景提示模板（代码生成/问题建议/规则配置）
-  - 集成输出解析器处理特殊格式（ RuleConfigGeneratorOutputParser ）
+#### entities/作用：核心数据结构定义中心
+- 核心功能 ：统一的实体类和枚举类型，为跨模块数据交互提供类型安全保障和结构一致性
+- 关键实现 ：
+  - agent_entities.py 智能代理策略定义
+  - model_entities.py 模型状态与提供商抽象
+  - parameter_entities.py 参数类型系统
+  - provider_entities.py - 提供商配置与配额管理
 - 技术特点 ：
-  - 支持JSON修复和错误恢复
-  - 实现代码生成安全沙箱
-  - 动态调整生成参数（temperature/max_tokens）
+  - 类型安全保障 ：通过严格的枚举和Pydantic模型，消除跨模块数据传递的类型歧义
+  - 标准化接口 ：统一的数据结构定义使各模块间通信契约清晰，降低集成成本
+  - 业务领域抽象 ：将核心业务概念（如模型状态、参数类型）显性化为代码实体，提升可维护性
+  - 扩展友好 ：新业务实体可通过新增文件自然扩展，无需修改现有代码
+  - 跨层复用 ：这些实体类被控制器、服务层、模型运行时等多层引用，是连接系统各部分的"数据胶水"
+#### extension/作用：扩展机制框架
+- 核心功能 ：实现插件化扩展体系，支持功能模块动态注册
+- 关键实现 ： extension.py 定义扩展点接口规范
+- 支持扩展类型 ：
+  - 内容审核（Moderation）
+  - 外部数据工具（ExternalDataTool）
+  - 自定义模型适配器
+#### external_data_tool/作用：外部数据集成
+- 核心功能 ：通过外部API获取数据并注入应用上下文
+- 关键实现 ： external_data_fetch.py 支持多线程并行数据获取
+- 技术特点 ：
+  - 基于 ExternalDataVariableEntity 定义数据变量
+  - 支持动态参数绑定和结果缓存
+  - 超时和错误处理机制
 #### file/作用：文件处理中心
 - 核心功能 ：统一文件管理接口，支持多类型文件转换和访问控制
 - 关键实现 ： file_manager.py 提供文件URL生成、格式转换和权限签名
@@ -571,17 +603,6 @@ Dify 后端使用蓝图（Blueprint）来组织 API 路由，主要包含以下�
   - 集成存储抽象层支持多后端（本地/S3/云存储）
   - 实现文件访问签名和有效期控制
   - 支持base64编码和URL代理访问
-#### mcp/作用：模型通信协议
-- 核心功能 ：实现MCP(Model Communication Protocol)客户端，支持流式通信
-- 关键实现 ： mcp_client.py 封装SSE和HTTP流两种通信模式
-- 技术特点 ：
-  - 自动降级机制（优先HTTP流，失败时切换SSE）
-  - 会话生命周期管理和连接池优化
-  - 支持双向认证和加密传输
-#### rag/作用：RAG 系统核心逻辑
-- 实现基于检索的问答系统（Retrieval-Augmented Generation）
-- 支持自定义知识库检索（如文档、数据库等）
-- 整合模型服务，实现上下文感知的回答生成
 #### helper/作用：通用工具集
 - 核心功能 ：提供跨模块通用工具，包括代码执行、加密和网络请求
 - 关键模块 ：
@@ -592,13 +613,48 @@ Dify 后端使用蓝图（Blueprint）来组织 API 路由，主要包含以下�
   - 代码执行沙箱隔离
   - 防SSRF代理
   - 凭证安全存储
-#### external_data_tool/作用：外部数据集成
-- 核心功能 ：通过外部API获取数据并注入应用上下文
-- 关键实现 ： external_data_fetch.py 支持多线程并行数据获取
+#### llm_generator/作用：大语言模型生成器
+- 核心功能 ：提供LLM调用封装，支持结构化输出、代码生成和提示优化
+- 关键实现 ：
+  - 通过 llm_generator.py 实现多场景提示模板（代码生成/问题建议/规则配置）
+  - 集成输出解析器处理特殊格式（ RuleConfigGeneratorOutputParser ）
 - 技术特点 ：
-  - 基于 ExternalDataVariableEntity 定义数据变量
-  - 支持动态参数绑定和结果缓存
-  - 超时和错误处理机制
+  - 支持JSON修复和错误恢复
+  - 实现代码生成安全沙箱
+  - 动态调整生成参数（temperature/max_tokens）
+#### mcp/作用：模型通信协议
+- 核心功能 ：实现MCP(Model Communication Protocol)客户端，支持流式通信
+- 关键实现 ： mcp_client.py 封装SSE和HTTP流两种通信模式
+- 技术特点 ：
+  - 自动降级机制（优先HTTP流，失败时切换SSE）
+  - 会话生命周期管理和连接池优化
+  - 支持双向认证和加密传输
+#### model_runtime/作用：模型运行时核心
+- 核心功能 ：统一模型调用接口，适配不同厂商LLM/Embedding模型
+- 关键实现 ：model_providers/__base/large_language_model.py 定义LLM标准接口
+- 技术特点 ：
+  - 支持流式/非流式响应统一处理
+  - 实现工具调用格式标准化（Function Call）
+  - 内置模型计费统计（token用量/成本计算）
+#### moderation/作用：内容安全审核
+- 核心功能 ：实现输入内容安全检测，防止违规信息处理
+- 关键实现 ： input_moderation.py 集成多策略审核机制
+- 审核策略 ：
+  - 基于规则的关键词过滤
+  - 第三方内容审核API集成（如阿里云/腾讯云）
+  - 自定义敏感词库管理
+#### prompt/作用：提示工程框架
+- 核心功能 ：提供提示模板解析与模型格式转换能力
+- 关键实现 ： simple_prompt_transform.py 处理基础提示转换
+- 技术特点 ：
+  - 支持Chat/Completion模式自动适配
+  - 集成文件内容提取与格式化
+  - 兼容多模型提示格式（OpenAI/Anthropic等）
+#### rag/作用：RAG 系统核心逻辑
+- 实现基于检索的问答系统（Retrieval-Augmented Generation）
+- 支持自定义知识库检索（如文档、数据库等）
+- 整合模型服务，实现上下文感知的回答生成
+
 
 ### 4.4 模型层
 
