@@ -629,6 +629,13 @@ Dify 后端使用蓝图（Blueprint）来组织 API 路由，主要包含以下�
   - 自动降级机制（优先HTTP流，失败时切换SSE）
   - 会话生命周期管理和连接池优化
   - 支持双向认证和加密传输
+#### memory/作用：对话记忆管理，专注于对话上下文的智能缓冲与token控制，确保大语言模型调用时的上下文窗口高效利用
+- 核心功能 ：提供对话历史的token级管理能力
+- 关键实现 ：token_buffer_memory.py ：实现 TokenBufferMemory 类
+- 技术特点 ：
+  - Token精细化管理 ：通过缓冲机制动态调整对话历史长度，防止模型调用时超出token限制
+  - 多模态支持 ：原生支持文本与文件混合消息的记忆处理，适配Dify的多模态对话能力
+  - 通过 workflow_run_repo 与工作流系统集成，支持复杂对话流程的记忆状态维护
 #### model_runtime/作用：模型运行时核心
 - 核心功能 ：统一模型调用接口，适配不同厂商LLM/Embedding模型
 - 关键实现 ：model_providers/__base/large_language_model.py 定义LLM标准接口
@@ -643,6 +650,54 @@ Dify 后端使用蓝图（Blueprint）来组织 API 路由，主要包含以下�
   - 基于规则的关键词过滤
   - 第三方内容审核API集成（如阿里云/腾讯云）
   - 自定义敏感词库管理
+#### ops/作用：全链路追踪与可观测性中心
+- 核心功能 ：集成第三方APM（应用性能监控）工具，实现系统运行时数据的采集、处理与分析，支撑开发者调试与系统优化
+- 关键实现 ：ops_trace_manager.py 统筹追踪配置、任务分发与多提供商集成
+- 技术特点 ：
+  - 多提供商兼容：
+    - 通过TracingProviderEnum 枚举支持10+主流追踪服务；
+    - 采用 OpsTraceProviderConfigMap 统一管理不同服务商的配置schema；
+    - 实现 get_service_account_with_tenant 方法处理跨租户的认证隔离
+  - 全链路数据采集：
+    - 覆盖核心业务场景：消息处理（ MessageTraceInfo ）、工具调用（ ToolTraceInfo ）、工作流执行（ WorkflowTraceInfo ）；
+    - 通过 process_trace_tasks 异步任务处理海量追踪数据，避免阻塞主流程；
+    - 集成 storage 模块实现追踪日志的持久化存储
+  - 性能与安全设计：
+    - 采用LRU缓存（ LRUCache ）优化配置读取性能
+    - 通过 batch_decrypt_token / obfuscated_token 实现敏感凭证的安全处理
+    - 基于 measure_time 上下文管理器实现低侵入式性能埋点
+#### plugin/作用：插件生态核心框架
+- 核心功能 ：提供插件全生命周期管理的基础设施，支持第三方功能扩展与系统能力增强
+- 关键实现 ：
+    - entities/: 插件实体定义
+        - 基础模型 ： base.py 定义 BasePluginEntity 基类，统一插件实体的ID与时间戳管理
+        - 功能实体 ：包含 plugin.py （插件元数据）、 oauth.py （认证配置）、 parameters.py （参数体系）等细分模型
+        - 数据契约 ：通过Pydantic模型确保插件数据结构的一致性与类型安全
+    - impl/: 插件运行时实现
+        - 核心抽象 ： base.py 实现插件调用的基础框架，包含超时控制（默认300秒）、异常体系（如 PluginInvokeError ）
+        - 类型适配 ：针对不同插件类型提供专用实现：
+            - agent.py ：智能代理插件运行时
+            - datasource.py ：数据源集成适配器
+            - tool.py ：工具调用封装器
+            - trigger.py ：事件触发器处理器
+        - 通信层 ：通过 plugin_daemon_inner_api_baseurl 与插件守护进程通信，实现进程隔离
+    - utils/: 插件工具集
+        - HTTP处理 ： http_parser.py 提供请求序列化/反序列化（ serialize_request / deserialize_request ）
+        - 数据处理 ： chunk_merger.py 实现大数据块合并， converter.py 提供类型转换工具
+        - 协议适配 ：处理插件与主系统间的协议转换与数据清洗
+- 技术特点 ：
+  - 严格的异常体系 ：
+        - 定义20+专用异常
+        - 区分认证错误、权限错误、超时错误等场景，便于问题定位
+  - 进程隔离设计 ：
+        - 通过插件守护进程（Plugin Daemon）实现插件与主系统的进程隔离
+        - 使用HTTP客户端（ httpx ）进行跨进程通信，保障系统稳定性
+  - 标准化接口 ：
+        - 基于Pydantic模型实现输入输出验证
+        - 统一插件元数据格式与调用协议
+  - 多场景适配 ：
+        - 支持代理、数据源、工具、触发器等多种插件类型
+        - 内置OAuth认证、动态参数等高级特性
 #### prompt/作用：提示工程框架
 - 核心功能 ：提供提示模板解析与模型格式转换能力
 - 关键实现 ： simple_prompt_transform.py 处理基础提示转换
@@ -651,10 +706,62 @@ Dify 后端使用蓝图（Blueprint）来组织 API 路由，主要包含以下�
   - 集成文件内容提取与格式化
   - 兼容多模型提示格式（OpenAI/Anthropic等）
 #### rag/作用：RAG 系统核心逻辑
-- 实现基于检索的问答系统（Retrieval-Augmented Generation）
-- 支持自定义知识库检索（如文档、数据库等）
-- 整合模型服务，实现上下文感知的回答生成
-
+- 核心功能：将外部知识与大语言模型能力深度融合，实现基于私有数据的智能问答
+- 关键实现：
+  - retrieval/：检索系统
+    - rdataset_retrieval.py ：实现数据集级检索逻辑，支持多数据源联合查询与权限控制
+    - retrieval_methods.py ：定义核心检索策略枚举
+      - SEMANTIC_SEARCH ：基于向量相似度的语义检索
+      - FULL_TEXT_SEARCH ：传统全文检索
+      - HYBRID_SEARCH ：语义+全文混合检索
+      - KEYWORD_SEARCH ：关键词精确匹配
+    - router/ ：实现多数据集路由机制，支持ReAct/Function Call等策略的检索规划
+  - splitter/、cleaner/、extractor/：数据预处理
+  - embedding/、index_processor/：向量处理
+  - pipeline/、rerank/：增强生成
+- 技术特点：
+  - 多策略检索融合：支持四种检索方法的动态切换与组合，通过 is_support_semantic_search 等方法实现检索能力适配
+  - 全链路可观测性：集成 TraceQueueManager 实现检索过程追踪，通过 measure_time 上下文管理器记录性能指标
+  - 灵活的权限控制：基于数据集实体（ DatasetEntity ）的访问控制，支持细粒度的元数据过滤（ MetadataFilteringCondition ）
+  - 模型无关设计：通过 ModelManager 适配不同embedding/LLM模型，支持模型状态（ ModelStatus ）与特性（ ModelFeature ）的动态检测
+#### repositories/作用：工作流数据访问层核心组件采
+- 核心功能：作为领域驱动设计(DDD)中的仓储层实现，负责工作流执行数据的持久化与检索，隔离业务逻辑与数据访问细节，支持多存储策略切换。
+- 技术特点：用仓储模式+工厂模式 架构，为工作流执行数据提供统一接口与多策略存储实现
+#### schemas/作用：JSON Schema管理中心
+- 核心功能：作为系统级的数据契约层，负责管理所有业务实体的JSON Schema定义，提供版本化存储、引用解析和统一访问接口，是实现数据验证、API契约管理和前后端协作的基础组件。
+ 关键文件解析
+#### tools/作用：工具功能的核心实现模块
+- 核心功能：
+  - 工具基础框架 ： 通过 `tool.py` 、 `tool_provider.py` 和 `tool_runtime.py` 定义了工具的基础接口和运行时环境
+  - 内置工具实现 ： 包含多种预置工具，如音频处理、代码执行、时间工具和网页抓取等，通过 `provider.py` 和 `tool.py` 提供统一访问接口。
+  - 自定义工具支持 ： 自定义工具的扩展机制，允许用户开发和集成自己的工具
+  - 工具管理系统 ： `tool_manager.py` 负责工具的注册、发现和调度， `tool_engine.py` 则协调工具的执行流程
+  - 实体与类型定义 ： entities目录定义了工具相关的数据结构和常量，确保工具间数据交换的一致性
+  - 扩展机制 ： 通过 `plugin_tool` 和 `workflow_as_tool` 支持插件扩展和工作流工具化，增强系统的灵活性
+  - 工具类工具函数 ： `utils` 提供了加密、解析、文本处理等通用功能，以及数据集检索等专用工具支持
+#### trigger/作用：事件触发机制的核心实现模块
+- 核心功能：
+  - 触发器管理 ：通过 `trigger_manager.py` 实现触发器的注册、激活和生命周期管理，协调系统中的各类事件响应流程
+  - 事件驱动架构 ： `debug` 目录包含事件总线（ `event_bus.py` ）、事件选择器和事件定义，实现事件的发布-订阅模式，支持系统组件间的松耦合通信
+  - 触发器实体定义 ： `entities` 目录定义了触发器相关的数据结构（如 `entities.py` ），规范事件数据格式和触发器配置参数
+  - 触发器接口抽象 ： `provider.py` 提供了触发器提供者的基础接口，支持不同类型触发器（如定时触发、事件触发、外部API触发等）的统一接入
+  - 触发辅助功能 ： `utils` 提供加密（ `encryption.py` ）、端点管理和分布式锁（ `locks.py` ）等功能，保障触发器执行的安全性和可靠性
+#### variable/作用：变量管理功能的核心实现模块
+- 核心功能：
+  - 变量基础定义 ：通过 `variables.py` 实现变量的核心逻辑，包括变量的定义、解析和管理机制
+  - 类型系统 ： `types.py` 定义了变量相关的数据类型，确保变量在系统中的一致性和类型安全
+  - 常量管理 ： `consts.py` 提供了变量系统的常量定义，规范变量的默认值和约束条件
+  - 变量分段机制 ： `segments.py` 和 `segment_group.py` 实现了变量的分段和分组管理，支持复杂场景下的变量组织
+  - 异常处理 ： `exc.py` 定义了变量操作相关的异常类型，提供针对性的错误处理机制
+  - 工具函数 ： `utils.py` 提供变量解析、验证、转换等辅助功能，支持变量系统的高效运行
+#### workflow/作用：工作流引擎的核心实现模块
+- 核心功能：
+  - 工作流定义与执行 ：通过 `graph.py` 和 `workflow_entry.py` 实现工作流的图形化定义和执行入口，支持复杂业务流程的建模与运行
+  - 核心引擎组件 ： `graph_engine` 提供工作流执行的核心引擎，包括命令处理（ `command_processor.py` ）、任务编排（ `execution_coordinator.py` ）和分布式 worker 管理（ `worker_pool.py` ），支持并发执行和复杂流程控制
+  - 事件驱动架构 ： `graph_events` 和 `node_events` 目录实现工作流生命周期事件（如节点执行、循环迭代、智能体交互）的定义与处理，支持自定义扩展和流程监控
+  - 状态与变量管理 ：通过 `graph_state_manager.py` 和 `variable_loader.py` 实现工作流状态跟踪和变量管理，确保流程执行的上下文一致性
+  - 错误与边界处理 ： `errors.py` 定义工作流特定异常， `execution_limits.py` 实现执行限制和资源管控，保障系统稳定性
+  - 多模式触发支持 ： `nodes/trigger_webhook` 、 `nodes/trigger_schedule` 等目录支持Webhook、定时任务等多模式触发机制，实现外部系统集成和自动化调度
 
 ### 4.4 模型层
 
